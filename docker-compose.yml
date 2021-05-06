@@ -136,7 +136,61 @@ services:
     ports:
       - "8888:8888"
       - 3010:3010
-#    #### ACTOR TEMPLATE SERVICES - Uncomment and edit as appropriate ######
+  #########################################################################
+  #### mediator Services
+  mediator-wallet-db:
+    image: postgres:11
+    container_name: mediator-wallet-db
+    command: postgres -c listen_addresses='*'
+    # env file defines
+    env_file:
+      - playground/mediator/.env
+    volumes:
+      - ./resources/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - mediator-domain
+    tty: true
+  ngrok-mediator:
+    image: wernight/ngrok
+    env_file:
+      - playground/mediator/.env
+    command: ngrok http mediator-agent:3020 --log stdout
+    networks:
+      - mediator-domain
+  mediator-agent:
+    build:
+      context: .
+      dockerfile: dockerfiles/Dockerfile.agent
+    env_file:
+      - playground/mediator/.env
+    ports:
+      ## HTTP_PORT
+      - <UNIQUE_PORT>:3020
+      # ADMIN_PORT
+      - <UNIQUE_PORT>:3021
+    depends_on:
+      - mediator-wallet-db
+    networks:
+      - mediator-domain
+  mediator-business-logic:
+    build:
+      context: .
+      dockerfile: dockerfiles/Dockerfile.controller
+    env_file:
+      - playground/mediator/.env
+    depends_on:
+      - mediator-agent
+    networks:
+      - mediator-domain
+    volumes:
+      - ./playground/mediator/notebooks:/workspace
+      - ./recipes:/workspace/recipes
+    ports:
+      - 8890:8888
+      # WEBHOOK_PORT
+      - <UNIQUE_PORT>:3010
+  
+  #    #### ACTOR TEMPLATE SERVICES - Uncomment and edit as appropriate ######
 #      actor-wallet-db:
 #        image: postgres:11
 #        container_name: actor-wallet-db
@@ -189,6 +243,7 @@ services:
 networks:
   alice-domain:
   bob-domain:
+  mediator-domain:
 
 ## UNCOMMENT IF YOU WISH TO RUN A LOCAL INDY NETWORK BASED ON VON
 ## THIS WILL NEED REQUIRE CHANGES TO THE ENV FILES OF ALL AGENTS
